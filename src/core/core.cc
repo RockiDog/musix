@@ -4,10 +4,9 @@
 
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <sstream>
 #include <string>
-
-#include <iostream>
 
 using namespace std;
 using namespace musix;
@@ -26,14 +25,91 @@ unsigned int left_rotate(unsigned int num, int r) {
 }
 
 size_t receive_json(char* ptr, size_t size, size_t nmemb, void* userdata) {
-  ostringstream& ostream = *static_cast<ostringstream*>(userdata);
-  ostream.write(ptr, size * nmemb);
+  ostringstream& os = *static_cast<ostringstream*>(userdata);
+  os.write(ptr, size * nmemb);
   return size * nmemb;
 }
 
+size_t receive_mp3(char* ptr, size_t size, size_t nmemb, void* userdata) {
+  ofstream& ofs = *static_cast<ofstream*>(userdata);
+  ofs.write(ptr, size * nmemb);
+  return size * nmemb;
 }
 
-vector<unsigned char> byte_array(const string& str) {
+
+}
+
+Core* Core::instance_ = nullptr;
+const char* Core::SEARCH_URL = "http://music.163.com/api/search/pc";
+const char* Core::SEARCH_COOKIES =  "appver=1.9.2;os=pc";
+const char* Core::DOWNLOAD_URL_PREFIX = "http://m1.music.126.net/";
+
+Core::Core() : search_handle_(nullptr), download_handle_(nullptr) {
+  curl_global_init(CURL_GLOBAL_ALL);
+}
+
+Core::~Core() {
+  if (search_handle_ != nullptr)
+    curl_easy_cleanup(search_handle_);
+  if (download_handle_ != nullptr)
+    curl_easy_cleanup(download_handle_);
+  curl_global_cleanup();
+}
+
+Core* Core::Instance() {
+  if (instance_ == nullptr)
+    instance_ = new Core();
+  return instance_;
+}
+
+void Core::Release() {
+  if (instance_ != nullptr)
+    delete instance_;
+  instance_ = nullptr;
+}
+
+string Core::SearchAny(const string& keyword, int offset, int limit, SearchType type) {
+
+  /* Initialization */
+  if (search_handle_ == nullptr) {
+    search_handle_ = curl_easy_init();
+    curl_easy_setopt(search_handle_, CURLOPT_URL, SEARCH_URL);
+  }
+
+  ostringstream post_data_stream;
+  ostringstream received_json;
+  post_data_stream << "s="      << keyword << "&"
+                   << "type="   << type    << "&"
+                   << "offset=" << offset  << "&"
+                   << "limit="  << limit;
+  string post_data = post_data_stream.str();
+  curl_easy_setopt(search_handle_, CURLOPT_POSTFIELDS, post_data.c_str());
+  curl_easy_setopt(search_handle_, CURLOPT_COOKIE, SEARCH_COOKIES);
+  curl_easy_setopt(search_handle_, CURLOPT_WRITEDATA, &received_json);
+  curl_easy_setopt(search_handle_, CURLOPT_WRITEFUNCTION, receive_json);
+
+  curl_easy_perform(search_handle_);
+  return received_json.str();
+}
+
+void Core::DownloadSong(const std::string& song_dfs_id, const std::string& filename) {
+  ostringstream download_url_stream;
+  download_url_stream << DOWNLOAD_URL_PREFIX << "/"
+                      << encrypt_song_id(song_dfs_id) << "/"
+                      << song_dfs_id << ".mp3";
+  string download_url = download_url_stream.str();
+
+  std::ofstream mp3_file(filename);
+  if (download_handle_ == nullptr)
+    download_handle_ = curl_easy_init();
+  curl_easy_setopt(download_handle_, CURLOPT_URL, download_url.c_str());
+  curl_easy_setopt(download_handle_, CURLOPT_WRITEDATA, &mp3_file);
+  curl_easy_setopt(download_handle_, CURLOPT_WRITEFUNCTION, receive_mp3);
+  curl_easy_perform(download_handle_);
+  mp3_file.close();
+}
+
+vector<unsigned char> musix::utils::byte_array(const string& str) {
   vector<unsigned char> arr;
   for (string::const_iterator it = str.begin(); it != str.end() - 1; ++it)
     arr.push_back(*it);
@@ -167,68 +243,14 @@ string musix::utils::encrypt_song_id(const string& song_id) {
     id_byte[i] = song_id[i] ^ key[i % key_len];
 
   vector<unsigned char> encrypted = base64_encode((md5_encode(id_byte)));
-  char* tmp_str = new char[encrypted.size() + 1];
-  tmp_str[encrypted.size()] = 0;
+  ostringstream out_stream;
   for (vector<unsigned char>::iterator it = encrypted.begin(); it != encrypted.end(); ++it) {
     if (*it == '/')
-      tmp_str[it - encrypted.begin()] = '_';
+      out_stream.put('_');
     else if (*it == '+')
-      tmp_str[it - encrypted.begin()] = '-';
+      out_stream.put('-');
     else
-      tmp_str[it - encrypted.begin()] = *it;
+      out_stream.put(*it);
   }
-  string out_str(tmp_str);
-  delete [] tmp_str;
-  return out_str;
-}
-
-
-Core* Core::instance_ = nullptr;
-const char* Core::SEARCH_URL = "http://music.163.com/api/search/pc";
-const char* Core::SEARCH_COOKIES =  "appver=1.9.2;os=pc";
-
-Core::Core() : search_handle_(nullptr) {
-  curl_global_init(CURL_GLOBAL_ALL);
-}
-
-Core::~Core() {
-  if (search_handle_ != nullptr)
-    curl_easy_cleanup(search_handle_);
-  curl_global_cleanup();
-}
-
-Core* Core::Instance() {
-  if (instance_ == nullptr)
-    instance_ = new Core();
-  return instance_;
-}
-
-void Core::Release() {
-  if (instance_ != nullptr)
-    delete instance_;
-  instance_ = nullptr;
-}
-
-string Core::SearchAny(const string& keyword, int type, int offset, int limit) {
-
-  /* Initialization */
-  if (search_handle_ == nullptr) {
-    search_handle_ = curl_easy_init();
-    curl_easy_setopt(search_handle_, CURLOPT_URL, SEARCH_URL);
-  }
-
-  ostringstream post_data_stream;
-  ostringstream received_json;
-  post_data_stream << "s="      << keyword << "&"
-                   << "type="   << type    << "&"
-                   << "offset=" << offset  << "&"
-                   << "limit="  << limit;
-  string post_data = post_data_stream.str();
-  curl_easy_setopt(search_handle_, CURLOPT_POSTFIELDS, post_data.c_str());
-  curl_easy_setopt(search_handle_, CURLOPT_COOKIE, SEARCH_COOKIES);
-  curl_easy_setopt(search_handle_, CURLOPT_WRITEDATA, &received_json);
-  curl_easy_setopt(search_handle_, CURLOPT_WRITEFUNCTION, receive_json);
-
-  curl_easy_perform(search_handle_);
-  return received_json.str();
+  return out_stream.str();
 }

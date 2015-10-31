@@ -38,23 +38,29 @@ std::string encrypt_song_id(const std::string& song_id);
 
 class Core {
  public:
+  enum SearchType {
+    SONG   = 1,
+    ALBUM  = 10,
+    ARTIST = 100,
+    LIST   = 1000,
+    USER   = 1002
+  };
+
   static const char* SEARCH_URL;
   static const char* SEARCH_COOKIES;
+  static const char* DOWNLOAD_URL_PREFIX;
 
- public:
   static Core* Instance();
   static void Release();
 
- public:
-  std::string SearchAny(const std::string& keyword, int type, int offset, int limit);
+  std::string SearchAny(const std::string& keyword, int offset, int limit, SearchType type);
+  void DownloadSong(const std::string& song_dfs_id, const std::string& filename);
 
  private:
   CURL* search_handle_;
-
- private:
+  CURL* download_handle_;
   static Core* instance_;
 
- private:
   Core();
   ~Core();
   Core(const Core&);

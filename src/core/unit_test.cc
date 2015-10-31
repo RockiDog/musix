@@ -7,8 +7,8 @@ using namespace std;
 using namespace musix;
 
 int main() {
-  string json = Core::Instance()->search_anything("突然的自我", 1, 0, 1);
-  cout << json << endl;
+  string mp3_filename = "突然的自我.mp3";
+  Core::Instance()->DownloadSong("3350211930003282", mp3_filename);
   Core::Release();
   return 0;
 }
