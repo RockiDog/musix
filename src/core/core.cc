@@ -92,7 +92,7 @@ string Core::SearchAny(const string& keyword, int offset, int limit, SearchType 
   return received_json.str();
 }
 
-void Core::DownloadSong(const std::string& song_dfs_id, const std::string& filename) {
+void Core::DownloadASong(const std::string& song_dfs_id, const std::string& filename) {
   ostringstream download_url_stream;
   download_url_stream << DOWNLOAD_URL_PREFIX << "/"
                       << encrypt_song_id(song_dfs_id) << "/"

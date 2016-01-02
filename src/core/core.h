@@ -54,7 +54,7 @@ class Core {
   static void Release();
 
   std::string SearchAny(const std::string& keyword, int offset, int limit, SearchType type);
-  void DownloadSong(const std::string& song_dfs_id, const std::string& filename);
+  void DownloadASong(const std::string& song_dfs_id, const std::string& filename);
 
  private:
   CURL* search_handle_;
